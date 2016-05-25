@@ -32,7 +32,7 @@
 ################################################################################
 
 from openerp import models, fields, api, _
-from openerp.exceptions import except_orm, Warning
+from openerp.exceptions import except_orm, UserError 
 
 from openerp.osv.orm import transfer_modifiers_to_node
 import openerp.netsvc as netsvc
@@ -102,6 +102,24 @@ class report_xml(models.Model):
         enabled = icp.get_param('aeroo.docs_enabled')
         return enabled == 'True' and True or False
     
+    @api.multi
+    def get_template(self, model, rec_id, parser):
+        """Return the template to use accoring to the model instance
+        """
+        self.ensure_one()
+        tmpl = self.env.context.get('aeroo_tmpl')
+        if tmpl:
+            return tmpl
+        if self.tml_source in ('file', 'database'):
+            if not self.report_sxw_content or self.report_sxw_content=='False':
+                raise UserError(_('No template found!'))
+            return base64.decodestring(self.report_sxw_content)
+        record = self.env[model].browse(rec_id)
+        if hasattr(parser, 'get_template'):
+            template = parser.get_template(cr, uid, record)
+            return template
+        return self.report_sxw_content
+
     @api.model
     def load_from_file(self, path, key):
         class_inst = None
@@ -415,9 +433,7 @@ class report_xml(models.Model):
     def fields_view_get(self, view_id=None, view_type='form', toolbar=False, submenu=False):
         if self.env.context.get('default_report_type')=='aeroo':
             mda_mod = self.env['ir.model.data']
-            if view_type == 'form':
-                view_id = mda_mod.get_object_reference('report_aeroo', 'act_report_xml_view1')[1]
-            elif view_type == 'tree':
+            if view_type == 'tree':
                 view_id = mda_mod.get_object_reference('report_aeroo', 'act_aeroo_report_xml_view_tree')[1]
         res = super(report_xml, self).fields_view_get(view_id, view_type,
             toolbar=toolbar, submenu=submenu)
